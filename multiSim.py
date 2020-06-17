@@ -15,7 +15,7 @@ def runSim(sim):
     collectedData = []
     startTime = time.time()
     while time.time()-startTime<30.:
-        collectedData.append(sim.controlLoopStep([10,0.5]))#sim.randomDriveAction()))
+        collectedData.append(sim.controlLoopStep(sim.randomDriveAction()))
         if collectedData[-1][2]:
             sim.terrain.generate()
             sim.resetClifford()
@@ -33,7 +33,7 @@ for i in range(numParallelSims):
     sims.append(simController(physicsClientId=physicsClientId))
 
 data = sims[0].controlLoopStep([0,0])
-replayBuffer = ReplayBuffer(replayBufferLength,data[0],data[1],saveDataPrefix='simData/')
+replayBuffer = ReplayBuffer(replayBufferLength,data[0],data[1],saveDataPrefix='simData/',chooseCPU=True)
 
 sTime = time.time()
 executor = concurrent.futures.ProcessPoolExecutor()
@@ -42,7 +42,8 @@ while not replayBuffer.bufferFilled:
     for result in results:
         for data in result:
             replayBuffer.addData(data[0],data[1])
-    print("replay buffer index: " + str(replayBuffer.bufferIndex) + ", rtf: " + str(replayBuffer.bufferIndex*0.25/(time.time()-sTime)))  
+    print("replay buffer index: " + str(replayBuffer.bufferIndex) + ", rtf: " + str(replayBuffer.bufferIndex*0.25/(time.time()-sTime)))
+    print("estimated time left: " + str((replayBufferLength-replayBuffer.bufferIndex)/(replayBuffer.bufferIndex)*(time.time()-sTime)/60./60.) + "hours")  
 replayBuffer.saveData()
 executor.shutdown()
 for i in range(numParallelSims):

@@ -74,7 +74,7 @@ class RandomRockyTerrain:
     vecY = self.gridY.reshape(-1)-position[1]
     indices = vecX*vecX+vecY*vecY<1
     vecZ = self.gridZ.reshape(-1)[indices]
-    return np.max(vecZ)+0.18
+    return np.expand_dims(np.max(vecZ)+0.18, axis=0)
 
 if __name__=="__main__":
   physicsClient = p.connect(p.GUI)#or p.DIRECT for non-graphical version

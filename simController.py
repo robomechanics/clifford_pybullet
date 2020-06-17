@@ -93,13 +93,14 @@ if __name__=="__main__":
     replayBufferLength = 200
     sim = simController()
     data = sim.controlLoopStep([0,0])
-    replayBuffer = ReplayBuffer(replayBufferLength,data[0],data[1],saveDataPrefix='simData/')
+    replayBuffer = ReplayBuffer(replayBufferLength,data[0],data[1])
     while not replayBuffer.bufferFilled:
         simData = sim.controlLoopStep(sim.randomDriveAction())
         replayBuffer.addData(simData[0],simData[1])
+        print(replayBuffer.getRandBatch()[0][2])
         if simData[2]:
             sim.terrain.generate()
             sim.resetClifford()
-    replayBuffer.saveData()
+    #replayBuffer.saveData()
     print("DONE")
     p.disconnect()
