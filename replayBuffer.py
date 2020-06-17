@@ -50,11 +50,13 @@ class ReplayBuffer(object):
 								[self.outputData[i][index:endIndex,:] for i in range(0,len(self.outputData))]])
 			index = endIndex
 		return returnedData
-	def getRandBatch(self,batchSize=1,device=''):
+	def getRandBatch(self,batchSize=1,device='',percentageRange=[0,1]):
 		if len(device)==0:
 			device = self.device
 		maxIndex = self.bufferLength if self.bufferFilled else self.bufferIndex
-		indices = np.random.choice(maxIndex,batchSize) if maxIndex > batchSize else np.arange(maxIndex)
+		minIndex = int(maxIndex*percentageRange[0])
+		maxIndex = int(maxIndex*percentageRange[1])
+		indices = minIndex+np.random.choice(maxIndex-minIndex,batchSize) if (maxIndex-minIndex) > batchSize else np.arange(minIndex,maxIndex)
 		#indices = np.random.randint(0,maxIndex,batchSize)
 		returnedData =[[self.inputData[i][indices,:].to(device) for i in range(0,len(self.inputData))],
 						[self.outputData[i][indices,:].to(device) for i in range(0,len(self.outputData))]]

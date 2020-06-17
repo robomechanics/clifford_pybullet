@@ -29,6 +29,12 @@ class learnDeterministicMotionModel(object):
         self.optimizer.step()
         self.lrScheduler.step()
         return loss.item()
+    def evalMotionModel(self,dataBatch):
+        self.MotionModel.eval()
+        actualNextStates = dataBatch[1][0]
+        predictedNextStates = self.MotionModel(dataBatch[0])
+        loss = self.criterion(actualNextStates,predictedNextStates)
+        return loss.item()
 
 def plotTrainLoss(trainingLossRecord,plotFrequency,numPlotPoints):
     if len(trainingLossRecord)%plotFrequency!=0 or len(trainingLossRecord)==0:
@@ -67,7 +73,10 @@ if __name__ == '__main__':
     motionModelArgs = [argDim,networkSizes,dropout_p]
     Learn = learnDeterministicMotionModel(learningArgs,motionModelArgs)
     #Learn.MotionModel.load_state_dict(torch.load('randomTerrainMotionModel/motionModel.pt'))
-    batchSize = 1000
+    trainBatchSize = 1000
+    trainingSet = [0,0.8]
+    testBatchSize = 10000
+    testSet = [0.8,1.0]
 
     # plotting params
     plotFrequency = 10
@@ -77,12 +86,14 @@ if __name__ == '__main__':
     updateCount = 0
     #sTime = time.time()
     while True:
-        dataBatch = cpuReplayBuffer.getRandBatch(batchSize,device=device)
+        dataBatch = cpuReplayBuffer.getRandBatch(trainBatchSize,device=device,percentageRange=trainingSet)
         trainLoss = Learn.updateMotionModel(dataBatch)
         updateCount+=1
         if updateCount%100==0:
             print("updateCount: " + str(updateCount) + " trainingLoss: " +str(trainLoss) + " lr: " + str(Learn.optimizer.state_dict()['param_groups'][-1]['lr']))
-            trainingLossRecord = np.append(trainingLossRecord,trainLoss)
+            dataBatch = cpuReplayBuffer.getRandBatch(testBatchSize,device=device,percentageRange=testSet)
+            loss = Learn.evalMotionModel(dataBatch)
+            trainingLossRecord = np.append(trainingLossRecord,loss)
             plotTrainLoss(trainingLossRecord,plotFrequency,numPlotPoints)
             #print(time.time()-sTime)
         #if updateCount%100==0:
