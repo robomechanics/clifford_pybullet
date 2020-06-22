@@ -39,7 +39,7 @@ class simController:
         self.clifford.updateSpringForce()
         p.stepSimulation(physicsClientId=self.physicsClientId)
         self.lastStateRecordFlag = False
-    def controlLoopStep(self,driveCommand,getData=True):
+    def controlLoopStep(self,driveCommand):
         throttle = driveCommand[0]
         steering = driveCommand[1]
         # check if last pose of clifford has been recorded
@@ -48,6 +48,7 @@ class simController:
             self.lastVel = self.clifford.getBaseVelocity_body()
             self.lastJointState = self.clifford.measureJoints()
         heightMap = self.terrain.robotHeightMap(self.lastPose[0],self.lastPose[2],self.rMapWidth,self.rMapHeight,self.rMapScale)
+        heightMap = np.expand_dims(heightMap,axis=0)
         # Input to NN motion predictor
         # tilt, body twist, joint position & velocity, ground height map, robot action
         nnInput = [self.lastPose[3]+self.lastVel[:]+self.lastJointState[:],heightMap,[driveCommand[0],driveCommand[1]]]
@@ -61,6 +62,7 @@ class simController:
         newPose = self.clifford.getPositionOrientation()
         invertedLastPose = p.invertTransform(self.lastPose[0],self.lastPose[1])
         relativePose = p.multiplyTransforms(invertedLastPose[0],invertedLastPose[1],newPose[0],newPose[1])
+        relativeHeading = newPose[2]-self.lastPose[2]
         baseVel = self.clifford.getBaseVelocity_body()
         jointState = self.clifford.measureJoints()
         # relative position, body twist, joint position and velocity
@@ -69,7 +71,7 @@ class simController:
         self.lastVel = baseVel
         self.lastJointState = jointState
         self.lastStateRecordFlag = True
-        return nnInput,nnOutputGroundTruth,self.simTerminateCheck(newPose,jointState),newPose[0]
+        return nnInput,nnOutputGroundTruth,self.simTerminateCheck(newPose,jointState),newPose,relativeHeading
     def simTerminateCheck(self,cliffordPose,jointState):
         cliffordStuck = False
         # check if suspension is about to invert
