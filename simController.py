@@ -7,6 +7,7 @@ from cliffordFixed import Clifford
 from replayBuffer import ReplayBuffer
 from noise import pnoise1
 from ouNoise import ouNoise
+import time
 
 class simController:
     def __init__(self,sdfRootPath='',physicsClientId=0,timeStep=1./240.,stepsPerControlLoop=60,gravity=-10,numSolverIterations=300,
@@ -18,11 +19,12 @@ class simController:
         self.rMapHeight = rMapHeight
         self.rMapScale = rMapScale
         self.timeStep = timeStep
-        p.setPhysicsEngineParameter(numSolverIterations=numSolverIterations,physicsClientId=self.physicsClientId)
+        #p.setPhysicsEngineParameter(constraintSolverType=p.CONSTRAINT_SOLVER_LCP_DANTZIG,globalCFM=0.000001)
+        p.setPhysicsEngineParameter(numSolverIterations=numSolverIterations,physicsClientId=self.physicsClientId)#,contactSlop=0.01,contactERP=0.5)#,contactERP=10)
         p.setGravity(0,0,gravity,physicsClientId=self.physicsClientId)
         p.setTimeStep(timeStep,physicsClientId=self.physicsClientId)
         self.terrain = RandomRockyTerrain(tMapWidth,tMapHeight,tMapScale,tMapScale,physicsClientId=self.physicsClientId)
-        self.terrain.generate()#cellHeightScale=0,perlinHeightScale=0.0)
+        self.terrain.generate()#cellHeightScale=0.0,perlinHeightScale=0.0)
         self.clifford = Clifford(physicsClientId=physicsClientId)
         self.resetClifford()
         self.randDrive = ouNoise()
@@ -47,11 +49,12 @@ class simController:
             self.lastPose = self.clifford.getPositionOrientation()
             self.lastVel = self.clifford.getBaseVelocity_body()
             self.lastJointState = self.clifford.measureJoints()
+            self.lastAbsoluteState = list(self.lastPose[0])+list(self.lastPose[1])+self.lastVel[:] + self.lastJointState[:]
         heightMap = self.terrain.robotHeightMap(self.lastPose[0],self.lastPose[2],self.rMapWidth,self.rMapHeight,self.rMapScale)
         heightMap = np.expand_dims(heightMap,axis=0)
         # Input to NN motion predictor
         # tilt, body twist, joint position & velocity, ground height map, robot action
-        nnInput = [self.lastPose[3]+self.lastVel[:]+self.lastJointState[:],heightMap,[driveCommand[0],driveCommand[1]]]
+        nnInput = [self.lastPose[3]+self.lastVel[:]+self.lastJointState[:],heightMap,[driveCommand[0],driveCommand[1]],self.lastAbsoluteState[:]]
         # command clifford throttle & steering
         self.clifford.drive(throttle)
         self.clifford.steer(steering)
@@ -70,13 +73,14 @@ class simController:
         self.lastPose = newPose
         self.lastVel = baseVel
         self.lastJointState = jointState
+        self.lastAbsoluteState = list(newPose[0])+list(newPose[1])+baseVel[:] + jointState[:]
         self.lastStateRecordFlag = True
-        return nnInput,nnOutputGroundTruth,self.simTerminateCheck(newPose,jointState),newPose,relativeHeading
+        return nnInput,nnOutputGroundTruth,self.simTerminateCheck(newPose,jointState),self.lastAbsoluteState[:],relativeHeading
     def simTerminateCheck(self,cliffordPose,jointState):
         cliffordStuck = False
         # check if suspension is about to invert
-        if np.max(jointState[0:4]) > 0.015:
-            cliffordStuck = True
+        #if np.max(jointState[0:4]) > 0.015:
+            #cliffordStuck = True
         # check if clifford is about to flip
         if cliffordPose[3][0] > 3.14/2.:
             cliffordStuck = True
@@ -88,20 +92,27 @@ class simController:
             cliffordStuck = True
         return cliffordStuck
     def randomDriveAction(self):
-        return self.randDrive.multiGenNoise(50)*np.array([50.,0.5])
+        return self.randDrive.multiGenNoise(50)*np.array([40.,0.5])
 
 if __name__=="__main__":
     physicsClient = p.connect(p.GUI)#or p.DIRECT for non-graphical version
     replayBufferLength = 200
-    sim = simController()
+    sim = simController(timeStep=1./500.,stepsPerControlLoop=50,numSolverIterations=300)
+    sim.terrain.generate(AverageAreaPerCell = 1,cellPerlinScale=5,cellHeightScale=0.75)
+    sim.resetClifford()
     data = sim.controlLoopStep([0,0])
     replayBuffer = ReplayBuffer(replayBufferLength,data[0],data[1])
+    sTime = time.time()
+    simTime = 0
     while not replayBuffer.bufferFilled:
         simData = sim.controlLoopStep(sim.randomDriveAction())
-        replayBuffer.addData(simData[0],simData[1])
-        print(replayBuffer.getRandBatch()[0][2])
+        #simData = sim.controlLoopStep([0,0])
+        simTime+=0.1
+        print((simTime/(time.time()-sTime)))
+        #replayBuffer.addData(simData[0],simData[1])
+        #print(replayBuffer.getRandBatch()[0][2])
         if simData[2]:
-            sim.terrain.generate()
+            sim.terrain.generate(AverageAreaPerCell = 1,cellPerlinScale=10,cellHeightScale=0.75)
             sim.resetClifford()
     #replayBuffer.saveData()
     print("DONE")

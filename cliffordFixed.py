@@ -49,6 +49,9 @@ class Clifford:
             self.linkNameToID[JointInfo[12].decode('UTF-8')] = JointInfo[0]
         measuredJointNames = ['frslower2upper','flslower2upper','brslower2upper','blslower2upper','axle2frwheel','frwheel2tire','flwheel2tire','brwheel2tire','blwheel2tire']
         self.measuredJointIDs = [self.jointNameToID[name] for name in measuredJointNames]
+        self.motorJointsIDs = [self.jointNameToID[name] for name in measuredJointNames[-4:]]
+        springJointNames = ['brslower2upper','blslower2upper','frslower2upper','flslower2upper']
+        self.springJointIDs = [self.jointNameToID[name] for name in springJointNames]
     def changeColor(self):
         nJoints = p.getNumJoints(self.cliffordID,physicsClientId=self.physicsClientId)
         redColor = [0.6,0.1,0.1,1]
@@ -100,17 +103,13 @@ class Clifford:
                                childFramePosition=[0, 0, 0],physicsClientId=self.physicsClientId)
         p.changeConstraint(c, gearRatio=-1, maxForce=10000,physicsClientId=self.physicsClientId)
 
-    def changeTraction(self,newTraction=1):
+    def changeTraction(self,newTraction=1.25):
         tires = ['frtire','fltire','brtire','bltire']
         for tire in tires:
-            p.changeDynamics(self.cliffordID,self.linkNameToID[tire],lateralFriction=newTraction)
+            p.changeDynamics(self.cliffordID,self.linkNameToID[tire],lateralFriction=newTraction,physicsClientId=self.physicsClientId)
 
     def updateSpringForce(self):
-        springJointNames = ['brslower2upper','blslower2upper','frslower2upper','flslower2upper']
-        springJointIDs = []
-        for name in springJointNames:
-            springJointIDs.append(self.jointNameToID[name])
-        springStates = p.getJointStates(self.cliffordID,springJointIDs,physicsClientId=self.physicsClientId)
+        springStates = p.getJointStates(self.cliffordID,self.springJointIDs,physicsClientId=self.physicsClientId)
         springConstant = 10000
         dampConstant = 100
         susForces = []
@@ -118,10 +117,12 @@ class Clifford:
             posErr = -springState[0]
             velErr = -springState[1]
             susForces.append(posErr*springConstant+velErr*dampConstant-10)
-        p.setJointMotorControlArray(self.cliffordID,springJointIDs,p.TORQUE_CONTROL,forces=susForces,physicsClientId=self.physicsClientId)
+        p.setJointMotorControlArray(self.cliffordID,self.springJointIDs,p.TORQUE_CONTROL,forces=susForces,physicsClientId=self.physicsClientId)
 
     def drive(self,driveSpeed):
         maxForce = 10
+        p.setJointMotorControlArray(self.cliffordID,self.motorJointsIDs,p.VELOCITY_CONTROL,targetVelocities=[driveSpeed]*4,forces=[maxForce]*4,physicsClientId=self.physicsClientId)
+        """
         p.setJointMotorControl2(bodyUniqueId=self.cliffordID, 
         jointIndex=self.jointNameToID['blwheel2tire'], 
         controlMode=p.VELOCITY_CONTROL,
@@ -141,7 +142,7 @@ class Clifford:
         jointIndex=self.jointNameToID['frwheel2tire'], 
         controlMode=p.VELOCITY_CONTROL,
         targetVelocity = driveSpeed,
-        force = maxForce,physicsClientId=self.physicsClientId)
+        force = maxForce,physicsClientId=self.physicsClientId)"""
     def steer(self,angle):
         maxForce = 1000
         p.setJointMotorControl2(bodyUniqueId=self.cliffordID, 

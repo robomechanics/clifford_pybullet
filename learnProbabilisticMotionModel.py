@@ -56,7 +56,6 @@ if __name__ == '__main__':
     # load replay buffer
     cpuReplayBuffer = ReplayBuffer(loadDataPrefix='simData/',saveDataPrefix='simData/',chooseCPU = True)
     cpuReplayBuffer.loadData(matchLoadSize=True)
-    cpuReplayBuffer.inputData[1] = cpuReplayBuffer.inputData[1].unsqueeze(1)
     data = cpuReplayBuffer.getRandBatch()
     inStateDim = data[0][0].shape[1]
     inMapDim = data[0][1].shape[2]
@@ -66,7 +65,7 @@ if __name__ == '__main__':
     # training/ neural network parameters
     learningRate = 0.0001
     lrDecay_stepSize = 50000
-    lrDecay_gamma = 0.9
+    lrDecay_gamma = 1
     weight_decay=0
     learningArgs = [learningRate,lrDecay_stepSize,lrDecay_gamma,weight_decay]
     argDim = [inStateDim,inMapDim,inActionDim,outStateDim]

@@ -19,7 +19,8 @@ class RandomRockyTerrain:
     self.replaceID = []
     self.physicsClientId = physicsClientId
     self.terrainBody = []
-  def generate(self,AverageAreaPerCell = 2.5,cellPerlinScale=0.5,cellHeightScale=0.75,smoothing=1,perlinScale=5,perlinHeightScale=0.05):
+  def generate(self,AverageAreaPerCell = 3,cellPerlinScale=0.5,cellHeightScale=0.5,smoothing=1,perlinScale=2.5,perlinHeightScale=0.1):
+  #AverageAreaPerCell = 2.5,cellPerlinScale=0.5,cellHeightScale=0.75,smoothing=1,perlinScale=5,perlinHeightScale=0.05):
     # generate random blocks
     numCells = int(float(self.mapSize[0])*float(self.mapSize[1])/float(AverageAreaPerCell))
     blockHeights = self.randomSteps(self.gridX.reshape(-1),self.gridY.reshape(-1),numCells,cellPerlinScale,cellHeightScale)
@@ -30,14 +31,18 @@ class RandomRockyTerrain:
     self.gridZ = blockHeights+smallNoise
     self.gridZ = self.gridZ-np.min(self.gridZ)
     if isinstance(self.replaceID,int):
-      terrainShape = p.createCollisionShape(heightfieldTextureScaling=0.001,shapeType = p.GEOM_HEIGHTFIELD,meshScale = self.meshScale, heightfieldData=self.gridZ.reshape(-1), numHeightfieldRows=self.mapWidth, numHeightfieldColumns=self.mapHeight,replaceHeightfieldIndex=self.replaceID,physicsClientId=self.physicsClientId)
-    else:
+      p.removeBody(self.terrainBody,physicsClientId=self.physicsClientId)
+      #terrainShape = p.createCollisionShape(heightfieldTextureScaling=0.001,shapeType = p.GEOM_HEIGHTFIELD,meshScale = self.meshScale, heightfieldData=self.gridZ.reshape(-1), numHeightfieldRows=self.mapWidth, numHeightfieldColumns=self.mapHeight,replaceHeightfieldIndex=self.replaceID,physicsClientId=self.physicsClientId)
+    #else:
+    if True:
       terrainShape = p.createCollisionShape(heightfieldTextureScaling=0.001,shapeType = p.GEOM_HEIGHTFIELD,meshScale = self.meshScale, heightfieldData=self.gridZ.reshape(-1), numHeightfieldRows=self.mapWidth, numHeightfieldColumns=self.mapHeight,physicsClientId=self.physicsClientId)
       self.terrainBody  = p.createMultiBody(0, terrainShape,physicsClientId=self.physicsClientId)
       p.changeVisualShape(self.terrainBody, -1, rgbaColor=[0.82,0.71,0.55,1],physicsClientId=self.physicsClientId)
+      #p.changeDynamics(self.terrainBody,-1,collisionMargin=0.01)#,contactStiffness=500000,contactDamping=1000)
+      self.terrainOffset = np.max(self.gridZ)/2.
     self.replaceID = terrainShape
-    offset = np.max(self.gridZ)/2.
-    p.resetBasePositionAndOrientation(self.terrainBody,[0,0,offset], [0,0,0,1],physicsClientId=self.physicsClientId)
+    #offset = np.max(self.gridZ)/2.
+    p.resetBasePositionAndOrientation(self.terrainBody,[-self.meshScale[0]/2.,-self.meshScale[1]/2.,self.terrainOffset], [0,0,0,1],physicsClientId=self.physicsClientId)
   def randomSteps(self,xPoints,yPoints,numCells,cellPerlinScale,cellHeightScale):
     centersX = np.random.uniform(size=numCells,low=np.min(xPoints),high=np.max(xPoints))
     centersY = np.random.uniform(size=numCells,low=np.min(yPoints),high=np.max(yPoints))

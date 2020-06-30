@@ -181,7 +181,7 @@
     <link name='blwheel'>
       <pose frame=''>-0.342683 0.115 -0.074 -2.8743 -0 1.5708</pose>
       <inertial>
-        <pose frame=''>0.059171 0 0 0 -0 0</pose>
+        <pose frame=''>0.0090009171 0 0 0 -0 0</pose>
         <mass>0.19539</mass>
         <inertia>
           <ixx>6.03364e-05</ixx>
@@ -277,7 +277,7 @@
     <link name='brwheel'>
       <pose frame=''>-0.342683 -0.115 -0.074 2.8743 0 -1.5708</pose>
       <inertial>
-        <pose frame=''>0.059171 -0 0 0 -0 0</pose>
+        <pose frame=''>0.0090009171 -0 0 0 -0 0</pose>
         <mass>0.19539</mass>
         <inertia>
           <ixx>6.03364e-05</ixx>
@@ -511,7 +511,7 @@
     <link name='flwheel'>
       <pose frame=''>0.342686 0.114999 -0.073995 2.87432 -2.4e-05 1.57078</pose>
       <inertial>
-        <pose frame=''>0.059171 0 0 0 -0 0</pose>
+        <pose frame=''>0.0090009171 0 0 0 -0 0</pose>
         <mass>0.19539</mass>
         <inertia>
           <ixx>6.03364e-05</ixx>
@@ -607,7 +607,7 @@
     <link name='frwheel'>
       <pose frame=''>0.342683 -0.115001 -0.074 0.267269 2.4e-05 -1.57081</pose>
       <inertial>
-        <pose frame=''>0.059171 0 -0 0 -0 0</pose>
+        <pose frame=''>0.0090009171 0 -0 0 -0 0</pose>
         <mass>0.19539</mass>
         <inertia>
           <ixx>6.03364e-05</ixx>
@@ -906,7 +906,7 @@
         <xyz>1 0 0</xyz>
         <limit>
           <lower>0</lower>
-          <upper>0.15</upper>
+          <upper>0.009000</upper>
           <effort>-1</effort>
           <velocity>-1</velocity>
         </limit>
@@ -924,7 +924,7 @@
         <xyz>1 0 0</xyz>
         <limit>
           <lower>0</lower>
-          <upper>0.15</upper>
+          <upper>0.009000</upper>
           <effort>-1</effort>
           <velocity>-1</velocity>
         </limit>
@@ -942,7 +942,7 @@
         <xyz>1 0 0</xyz>
         <limit>
           <lower>0</lower>
-          <upper>0.15</upper>
+          <upper>0.009000</upper>
           <effort>-1</effort>
           <velocity>-1</velocity>
         </limit>
@@ -960,7 +960,7 @@
         <xyz>1 0 0</xyz>
         <limit>
           <lower>0</lower>
-          <upper>0.15</upper>
+          <upper>0.009000</upper>
           <effort>-1</effort>
           <velocity>-1</velocity>
         </limit>

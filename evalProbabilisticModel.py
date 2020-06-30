@@ -3,8 +3,9 @@ from simController import simController
 from motionModel import probabilisticMotionModel
 import matplotlib.pyplot as plt
 import torch
+import numpy as np
 
-physicsClientId = p.connect(p.GUI)
+physicsClientId = p.connect(p.DIRECT)
 sim = simController(physicsClientId=physicsClientId)
 startState = sim.controlLoopStep([0,0])
 predictedPose = startState[3][0:2]
@@ -31,30 +32,40 @@ actualY = [startState[3][0][1]]
 predX = [startState[3][0][0]]
 predY = [startState[3][0][1]]
 for i in range(50):
-	print(i)
-	data = sim.controlLoopStep(sim.randomDriveAction())
-	if data[2]:
-		break
-	inState = torch.FloatTensor(data[0][0]).unsqueeze(0).to(device)
-	inAction = torch.FloatTensor(data[0][2]).unsqueeze(0).to(device)
-	inMap = torch.from_numpy(data[0][1]).unsqueeze(0).float().to(device)
-	prediction = motionModel([inState,inMap,inAction])[0]
-	relativePos = prediction[0,0:3]
-	relativeOrien = prediction[0,3:7]
-	predictedTwist = prediction[0,7:13]
-	predictedJointState = prediction[0,13:27]
-	predictedPose = p.multiplyTransforms(predictedPose[0],predictedPose[1],relativePos,relativeOrien)
-	actualX.append(data[3][0][0])
-	actualY.append(data[3][0][1])
-	predX.append(predictedPose[0][0])
-	predY.append(predictedPose[0][1])
+    print(i)
+    data = sim.controlLoopStep(sim.randomDriveAction())
+    if data[2]:
+        break
+    Rwb = predictedPose[1]
+    Rbw = p.invertTransform([0,0,0],Rwb)[1]
+    upDir = p.multiplyTransforms([0,0,0],Rbw,[0,0,1],[0,0,0,1])[0]
+    tiltAngles = [np.arccos(upDir[2])]
+    tiltAngles.append(np.arctan2(upDir[1],upDir[0]))
+    print("next")
+    print(data[0][0][8:len(data[0][0])])
+    print(predictedJointState)
+    inState = torch.FloatTensor(tiltAngles + predictedTwist + predictedJointState).unsqueeze(0).to(device)
+    #inState = torch.FloatTensor(tiltAngles + predictedTwist + data[0][0][8:len(data[0][0])]).unsqueeze(0).to(device)
+    #inState = torch.FloatTensor(data[0][0]).unsqueeze(0).to(device)
+    inAction = torch.FloatTensor(data[0][2]).unsqueeze(0).to(device)
+    inMap = torch.from_numpy(data[0][1]).unsqueeze(0).float().to(device)
+    prediction = motionModel([inState,inMap,inAction])[0]
+    relativePos = prediction[0,0:3]
+    relativeOrien = prediction[0,3:7]
+    predictedTwist = prediction[0,7:13].tolist()
+    predictedJointState = prediction[0,13:27].tolist()
+    predictedPose = p.multiplyTransforms(predictedPose[0],predictedPose[1],relativePos,relativeOrien)
+    actualX.append(data[3][0][0])
+    actualY.append(data[3][0][1])
+    predX.append(predictedPose[0][0])
+    predY.append(predictedPose[0][1])
 p.disconnect(physicsClientId=physicsClientId)
 plt.figure()
 for i in range(len(actualX)):
-	plt.clf()
-	plt.plot(actualX[0:i],actualY[0:i])
-	plt.plot(predX[0:i],predY[0:i])
-	plt.xlim((-10,10))
-	plt.ylim((-10,10))
-	plt.pause(0.1)
+    plt.clf()
+    plt.plot(actualX[0:i],actualY[0:i])
+    plt.plot(predX[0:i],predY[0:i])
+    plt.xlim((-10,10))
+    plt.ylim((-10,10))
+    plt.pause(0.1)
 plt.show()

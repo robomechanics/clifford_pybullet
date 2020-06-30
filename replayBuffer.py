@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from os import path
-
+import time
 class ReplayBuffer(object):
 	def __init__(self,bufferLength=0,sampleNNInput=[],sampleNNOutput=[],saveDataPrefix='',loadDataPrefix='',chooseCPU = False):
 		if chooseCPU:
@@ -102,4 +102,152 @@ class ReplayBuffer(object):
 		self.bufferIndex = self.inputData[0].shape[0]
 		if self.bufferIndex == self.bufferLength:
 			self.bufferFilled = True
+
+class sequentialReplayBuffer(object):
+	def __init__(self,bufferLength=0,sampleNNInput=[],sampleNNOutput=[],saveDataPrefix='',loadDataPrefix='',device = 'cpu'):
+		self.device = device
+		self.saveDataPrefix = saveDataPrefix
+		self.loadDataPrefix = loadDataPrefix
+		self.bufferLength = bufferLength
+		self.inputData = []
+		self.outputData = []
+		self.lastSequenceLength = -1
+		for data in sampleNNInput:
+			self.inputData.append(torch.zeros((self.bufferLength,)+np.array(data).shape,device=self.device))
+		for data in sampleNNOutput:
+			self.outputData.append(torch.zeros((self.bufferLength,)+np.array(data).shape,device=self.device))
+		self.purgeData()
+	def purgeData(self):
+		self.bufferIndex = 0
+		self.bufferFilled = False
+		self.sequenceStartIndices = np.array(0)
+	def addData(self,nnInput,nnOutputGroundTruth,isSequenceEnd):
+		if self.bufferFilled:
+			self.deleteFirstData()
+		inputData,outputData = self.processData(nnInput,nnOutputGroundTruth)
+		for i in range(len(inputData)):
+			self.inputData[i][self.bufferIndex,:] = inputData[i]
+		for i in range(len(outputData)):
+			self.outputData[i][self.bufferIndex,:] = outputData[i]
+		self.bufferIndex+=1
+		if isSequenceEnd:
+			self.sequenceStartIndices = np.append(self.sequenceStartIndices,self.bufferIndex)
+		if self.bufferIndex == self.bufferLength:
+			self.bufferFilled = True
+	def processData(self,nnInput,nnOutputGroundTruth):
+		inputData = []
+		outputData = []
+		for data in nnInput:
+			if torch.is_tensor(data):
+				inputData.append(data.to(self.device))
+			else:
+				inputData.append(torch.from_numpy(np.array(data)).to(self.device).unsqueeze(0).float())
+		for data in nnOutputGroundTruth:
+			if torch.is_tensor(data):
+				outputData.append(data.to(self.device))
+			else:
+				outputData.append(torch.from_numpy(np.array(data)).to(self.device).unsqueeze(0).float())
+		return inputData,outputData
+	def deleteFirstData(self):
+		for i in range(len(self.inputData)):
+			self.inputData[i][range(self.bufferLength-1),:] = self.inputData[i][range(1,self.bufferLength),:]
+		for i in range(len(self.outputData)):
+			self.outputData[i][range(self.bufferLength-1),:] = self.outputData[i][range(1,self.bufferLength),:]
+		self.bufferIndex-=1
+		self.sequenceStartIndices = np.unique(np.maximum(self.sequenceStartIndices-1,0))
+		self.bufferFilled = False
+	def getRandSequence(self,batchSize = 1,device='',percentageRange = [0.,1.]):
+		if len(device)==0:
+			device = self.device
+		if batchSize > self.bufferIndex:
+			batchSize = self.bufferIndex
+		randIndexOrder = np.random.choice(len(self.sequenceStartIndices),len(self.sequenceStartIndices),replace=False)
+		data2pull = np.array([])
+		batchStartIndices = np.array([0])
+		while len(data2pull)<batchSize:
+			startIndex = self.sequenceStartIndices[randIndexOrder[0]]
+			if randIndexOrder[0]<len(self.sequenceStartIndices)-1:
+				endIndex = self.sequenceStartIndices[randIndexOrder[0]+1]
+			else:
+				endIndex = self.bufferIndex
+			data2pull = np.append(data2pull,np.arange(startIndex,endIndex))
+			batchStartIndices = np.append(batchStartIndices,len(data2pull))
+			randIndexOrder = randIndexOrder[range(1,len(randIndexOrder))]
+		data2pull = data2pull[range(batchSize)]
+		batchStartIndices = np.unique(np.append(batchStartIndices[range(len(batchStartIndices)-1)],len(data2pull)))
+		returnedData =[[self.inputData[i][data2pull,:].to(device) for i in range(0,len(self.inputData))],
+						[self.outputData[i][data2pull,:].to(device) for i in range(0,len(self.outputData))],
+						batchStartIndices]
+		return returnedData
+	def getRandSequenceFixedLength(self,numSequences,sequenceLength,device='',percentageRange=[0.,1.]):
+		if len(device)==0:
+			device = self.device
+		if self.lastSequenceLength != sequenceLength:
+			self.validStartIndices = []
+			for i in range(len(self.sequenceStartIndices)-1):
+				self.validStartIndices = self.validStartIndices+list(range(self.sequenceStartIndices[i],self.sequenceStartIndices[i+1]-sequenceLength))
+			self.validStartIndices = np.array(self.validStartIndices)
+			self.lastSequenceLength = sequenceLength
+		startIndex = self.validStartIndices[self.validStartIndices >= int(self.bufferIndex*percentageRange[0])]
+		startIndex = startIndex[startIndex < int(self.bufferIndex*percentageRange[1])-sequenceLength]
+		startIndex = np.random.choice(startIndex,numSequences,replace=False)
+		output=[]
+		for i in range(sequenceLength):
+			output.append([[self.inputData[j][startIndex+i,:].to(device) for j in range(0,len(self.inputData))],
+						[self.outputData[j][startIndex+i,:].to(device) for j in range(0,len(self.outputData))]])
+		return output
+	def saveData(self):
+		for i in range(len(self.inputData)):
+			torch.save(self.inputData[i][range(0,self.bufferIndex),:],self.saveDataPrefix+"sequentialSimInputData"+str(i)+".pt")
+		for i in range(len(self.outputData)):
+			torch.save(self.outputData[i][range(0,self.bufferIndex),:],self.saveDataPrefix+"sequentialSimOutputData"+str(i)+".pt")
+		np.save(self.saveDataPrefix+"sequenceStartIndices.npy",self.sequenceStartIndices)
+	def loadData(self,fixBufferLength = False):
+		if fixBufferLength:
+			tempBuffer = sequentialReplayBuffer(loadDataPrefix=self.loadDataPrefix,device = self.device)
+			tempBuffer.loadData(fixBufferLength = False)
+			self.purgeData()
+			self.inheritData(tempBuffer)
+			del tempBuffer
+		else:
+			self.inputData = []
+			self.outputData = []
+			i = 0
+			while path.exists(self.loadDataPrefix+"sequentialSimInputData"+str(i)+".pt"):
+				self.inputData.append(torch.load(self.loadDataPrefix+"sequentialSimInputData"+str(i)+".pt").to(self.device))
+				i+=1
+			i = 0
+			while path.exists(self.loadDataPrefix+"sequentialSimOutputData"+str(i)+".pt"):
+				self.outputData.append(torch.load(self.loadDataPrefix+"sequentialSimOutputData"+str(i)+".pt").to(self.device))
+				i+=1
+			self.bufferIndex = self.inputData[0].shape[0]
+			self.bufferFilled = True
+			self.bufferLength = self.bufferIndex
+			self.sequenceStartIndices = np.load(self.loadDataPrefix+"sequenceStartIndices.npy")
+	def inheritData(self,otherBuffer,varyBufferLength=True):
+		self.sequenceStartIndices = np.unique(np.append(self.sequenceStartIndices,self.bufferIndex))
+		if varyBufferLength and (self.bufferIndex + otherBuffer.bufferIndex > self.bufferLength):
+			self.bufferFilled = False
+			toAdd = self.bufferIndex + otherBuffer.bufferIndex - self.bufferLength
+			self.bufferLength = self.bufferLength + toAdd
+			for i in range(len(self.inputData)):
+				self.inputData[i] = torch.cat((self.inputData[i],torch.zeros((toAdd,)+tuple(self.inputData[i].shape[1:]),device=self.device)),dim=0)
+			for i in range(len(self.outputData)):
+				self.outputData[i] = torch.cat((self.outputData[i],torch.zeros((toAdd,)+tuple(self.outputData[i].shape[1:]),device=self.device)),dim=0)
+		for i in range(otherBuffer.bufferIndex):
+			newInput = [otherBuffer.inputData[j][i,:] for j in range(len(otherBuffer.inputData))]
+			newOutput = [otherBuffer.outputData[j][i,:] for j in range(len(otherBuffer.outputData))]
+			self.addData(newInput,newOutput,(i+1) in otherBuffer.sequenceStartIndices)
+
+if __name__ == '__main__':
+    # check if cuda available
+    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+
+    # load replay buffer
+    cpuReplayBuffer = sequentialReplayBuffer(loadDataPrefix='simData/',saveDataPrefix='simData/')
+    cpuReplayBuffer.loadData()
+    dataBatch = cpuReplayBuffer.getRandSequenceFixedLength(10,5,percentageRange=[0.,0.1])
+
+
+
 

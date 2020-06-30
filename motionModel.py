@@ -5,7 +5,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 class deterministicMotionModel(nn.Module):
-	def __init__(self, motionModelArgs):
+	def __init__(self, motionModelArgs,batchNormsOn = True):
 		super(deterministicMotionModel, self).__init__()
 		# set size of neural network input
 		argDim = motionModelArgs[0]
@@ -36,6 +36,7 @@ class deterministicMotionModel(nn.Module):
 			self.dropouts.append(nn.Dropout(dropout_ps[i]))
 			lastDim = fcSize[i]
 		self.fcOutput = nn.Linear(fcSize[-1],self.outStateDim)
+		self.batchNormsOn = batchNormsOn
 		#dropout_ps = motionModelArgs[2]
 		#self.dropout = nn.Dropout(dropout_ps[0])
 	def forward(self,data):
@@ -48,7 +49,8 @@ class deterministicMotionModel(nn.Module):
 		rMap = rMap.view(-1,self.convOutputDim)
 		connected = torch.cat((rMap,rState,rAction),axis=1)
 		for i in range(len(self.fcs)):
-			connected = self.batchNorms[i](connected)
+			if self.batchNormsOn:
+				connected = self.batchNorms[i](connected)
 			connected = self.dropouts[i](connected)
 			connected = self.fcs[i](connected)
 			connected = F.leaky_relu(connected)
@@ -130,16 +132,31 @@ class probabilisticMotionModel(nn.Module):
 class simpleMotionModel(nn.Module):
 	def __init__(self):
 		super(simpleMotionModel, self).__init__()
-		self.p1 = 0.75 #estimated wheelbase
-		self.p2 = 1 #estimated scale
+		self.wheelBase = torch.nn.Parameter(torch.tensor(0.9, dtype=torch.float32, requires_grad=True)) #estimated wheelbase
+		self.register_parameter("wheelBase" , self.wheelBase )
+		self.driveScale = torch.nn.Parameter(torch.tensor(0.0096,dtype=torch.float32,requires_grad=True)) #estimated driving scale
+		self.register_parameter("driveScale" , self.driveScale )
 	def forward(self,data):
 		throttle = data[0][:,0]
 		steering = data[0][:,1]
-		turnRadius = self.p1*torch.tan(steering)
-		drivingDistance = self.p2*throttle
-		estimatedHeadingChange = -drivingDistance/turnRadius
-		estimatedXChange = -turnRadius*torch.sin(estimatedHeadingChange)
+		turnRadius = -self.wheelBase/torch.tan(steering)
+		drivingDistance = self.driveScale*throttle
+		estimatedHeadingChange = drivingDistance/turnRadius
+		estimatedXChange = turnRadius*torch.sin(estimatedHeadingChange)
 		estimatedYchange = turnRadius*(1.-torch.cos(estimatedHeadingChange))
+		estimatedHeadingChange = estimatedHeadingChange.clone()
+		estimatedXChange = estimatedXChange.clone()
+		estimatedYchange = estimatedYchange.clone()
+		estimatedHeadingChange[steering==0] = 0
+		estimatedXChange[steering==0] = drivingDistance[steering==0]
+		estimatedYchange[steering==0] = 0
+		estimatedXChange = estimatedXChange + self.wheelBase/2.*torch.cos(estimatedHeadingChange) - self.wheelBase/2.
+		estimatedYchange = estimatedYchange + self.wheelBase/2.*torch.sin(estimatedHeadingChange)
+		return torch.cat((estimatedXChange.unsqueeze(1),estimatedYchange.unsqueeze(1),estimatedHeadingChange.unsqueeze(1)),axis=1)
+
+
+
+
 
 
 
