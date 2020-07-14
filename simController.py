@@ -77,20 +77,20 @@ class simController:
         self.lastStateRecordFlag = True
         return nnInput,nnOutputGroundTruth,self.simTerminateCheck(newPose,jointState),self.lastAbsoluteState[:],relativeHeading
     def simTerminateCheck(self,cliffordPose,jointState):
-        cliffordStuck = False
+        termSim = False
         # check if suspension is about to invert
         #if np.max(jointState[0:4]) > 0.015:
-            #cliffordStuck = True
+            #termSim = True
         # check if clifford is about to flip
         if cliffordPose[3][0] > 3.14/2.:
-            cliffordStuck = True
+            termSim = True
         # check if clifford is out of bound
         maxZ = np.max(np.abs(self.terrain.gridZ)) + 1.
         maxX = np.max(self.terrain.gridX) - 1.
         maxY = np.max(self.terrain.gridY) - 1.
         if np.abs(cliffordPose[0][0])>maxX or np.abs(cliffordPose[0][1])>maxY or np.abs(cliffordPose[0][2])>maxZ:
-            cliffordStuck = True
-        return cliffordStuck
+            termSim = True
+        return termSim
     def randomDriveAction(self):
         return self.randDrive.multiGenNoise(50)*np.array([40.,0.5])
 

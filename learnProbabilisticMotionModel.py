@@ -76,7 +76,7 @@ if __name__ == '__main__':
     motionModelArgs = [argDim,networkSizes,dropout_ps]
     Learn = learnProbabilisticMotionModel(learningArgs,motionModelArgs)
     #Learn.MotionModel.load_state_dict(torch.load('randomTerrainMotionModel/motionModel.pt'))
-    trainBatchSize = 128
+    trainBatchSize = 10
     trainingSet = [0,0.8]
     testBatchSize = 512
     testSet = [trainingSet[1],1.0]

@@ -1,11 +1,10 @@
 import torch
 class cliffordStateTransformation(object):
-    def __init__(self,startState):
+    def __init__(self,startState,numParticles = 1):
         #if len(device)==0:
         #    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
         #self.currentState = torch.FloatTensor(startState).unsqueeze(0).to(device)
-        self.currentState = startState
-        orientation = startState[:,3:7]
+        self.currentState = startState.repeat_interleave(numParticles,dim=0)
     def moveState(self,nnOutput):
         relativePos = nnOutput[:,0:3]
         relativeOrien = nnOutput[:,3:7]
@@ -21,15 +20,22 @@ class cliffordStateTransformation(object):
         upDirWorld = torch.zeros(self.currentState.shape[0],3).to(self.currentState.device)
         upDirWorld[:,2] = 1.
         upDirRobot = self.qrot(Rbw,upDirWorld)
-        #tiltAngles = torch.cat((torch.acos(upDirRobot[:,2:3]),torch.atan2(upDirRobot[:,1:2],upDirRobot[:,0:1])),dim=1)
-        #if torch.isnan(torch.sum(tiltAngles)).item():
-        #    print("bad tilt angle")
-        #    stop
         twist = self.currentState[:,7:13]
         jointState = self.currentState[:,13:27]
         #inState = torch.cat((tiltAngles,twist,jointState),dim=1)
         inState = torch.cat((upDirRobot,twist,jointState),dim=1)
         return inState
+    def getRelativeState(self,absoluteState):
+        Rbw = self.qinv(self.currentState[:,3:7])
+        pbw = self.qrot(Rbw,-self.currentState[:,0:3])
+        relativePos,relativeOrien = self.transformMul(pbw,Rbw,absoluteState[:,0:3],absoluteState[:,3:7])
+        return torch.cat((relativePos,relativeOrien,absoluteState[:,7:27]),dim=1)
+    def posHeading(self):
+        xVec = torch.zeros(self.currentState.shape[0],3).to(self.currentState.device)
+        xVec[:,0] = 1.
+        xVec = self.qrot(self.currentState[:,3:7],xVec)
+        heading = torch.atan2(xVec[:,1],xVec[:,0]).unsqueeze(1)
+        return torch.cat((self.currentState[:,0:3],heading),dim=1)
     def transformMul(self,p1,q1,p2,q2):
         qout = self.qmul(q1,q2)
         pout = p1+self.qrot(q1,p2)

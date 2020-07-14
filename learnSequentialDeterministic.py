@@ -56,40 +56,40 @@ class learnSequentialDeterministic(object):
         lossCount = 0
         cliffordPredState = cliffordStateTransformation(dataBatch[0][0][3])
         for stepNum in range(0,len(dataBatch)-1):
-            if torch.isnan(torch.sum(cliffordPredState.currentState)):
-                print("bad absolute state")
+            #if torch.isnan(torch.sum(cliffordPredState.currentState)):
+            #    print("bad absolute state")
             mmInput = [cliffordPredState.stateToNNInState()]+dataBatch[stepNum][0][1:]
-            if torch.isnan(torch.sum(mmInput[0])).item():
-                print("bad mm input")
+            #if torch.isnan(torch.sum(mmInput[0])).item():
+            #    print("bad mm input")
             relativePrediction = self.MotionModel(mmInput)
-            if torch.isnan(torch.sum(relativePrediction)).item():
-                print("bad relative prediction")
+            #if torch.isnan(torch.sum(relativePrediction)).item():
+            #    print("bad relative prediction")
             absolutePrediction = cliffordPredState.moveState(relativePrediction)
             actualNextState = dataBatch[stepNum+1][0][3]
             lossCount+=1
             loss = loss + self.criterion(absolutePrediction,actualNextState)
         loss = loss/lossCount
         #loss = self.criterion(absolutePrediction,actualNextState)
-        if torch.isnan(torch.sum(torch.autograd.grad(loss, absolutePrediction,retain_graph=True)[0])):
-            print("bad absolutePrediction prediction")
-        if torch.isnan(torch.sum(torch.autograd.grad(loss, relativePrediction,retain_graph=True)[0])):
-            print("bad relativePrediction prediction")
+        #if torch.isnan(torch.sum(torch.autograd.grad(loss, absolutePrediction,retain_graph=True)[0])):
+        #    print("bad absolutePrediction prediction")
+        #if torch.isnan(torch.sum(torch.autograd.grad(loss, relativePrediction,retain_graph=True)[0])):
+        #    print("bad relativePrediction prediction")
         loss.backward()
-        if torch.isnan(loss).item():
-            print("bad loss value")
-        parameterSum = 0
-        parameterGradientSum = 0
-        for param in self.MotionModel.parameters():
-          if param.grad is not None:
-            parameterGradientSum+=torch.sum(param.grad).item()
-        if np.isnan(parameterGradientSum):
-            print('nan parameter gradient')
+        #if torch.isnan(loss).item():
+        #    print("bad loss value")
+        #parameterSum = 0
+        #parameterGradientSum = 0
+        #for param in self.MotionModel.parameters():
+        #  if param.grad is not None:
+        #    parameterGradientSum+=torch.sum(param.grad).item()
+        #if np.isnan(parameterGradientSum):
+        #    print('nan parameter gradient')
         self.optimizer.step()
-        for param in self.MotionModel.parameters():
-          if param.grad is not None:
-            parameterSum+=torch.sum(param).item()
-        if np.isnan(parameterSum):
-            print('nan parameter')
+        #for param in self.MotionModel.parameters():
+        #  if param.grad is not None:
+        #    parameterSum+=torch.sum(param).item()
+        #if np.isnan(parameterSum):
+        #    print('nan parameter')
         self.lrScheduler.step()
         return loss.item()
     def updateMotionModelNonSequential(self,dataBatch):
@@ -132,6 +132,7 @@ if __name__ == '__main__':
     motionModelArgs = [argDim,networkSizes,dropout_ps]
     Learn = learnSequentialDeterministic(learningArgs,motionModelArgs)
     trainBatchSize = 64
+    finalBatchSize = 32
     sequenceLength = 2
     maxSequenceLength = 50
     trainingSet = [0,0.8]
@@ -139,14 +140,17 @@ if __name__ == '__main__':
     testSet = [trainingSet[1],1.0]
     smoothing = 0.9
     smoothedLoss = 1
-    switchValue = 0.03
+    initialSwitchValue = 0.001
+    switchValue = 0.01
 
-    numUpdates = 500000
+    numUpdates = 500000000
     for updateCount in range(numUpdates):
-        #if updateCount%2000==0 and sequenceLength<maxSequenceLength:
-        if smoothedLoss < switchValue and sequenceLength<maxSequenceLength:
-            sequenceLength+=1
-            smoothedLoss = switchValue*1.1
+        #trainBatchSize = int(np.ceil(totalBatchSize/(sequenceLength-1.)))
+        if sequenceLength<maxSequenceLength:
+            if smoothedLoss < initialSwitchValue or (smoothedLoss < switchValue and sequenceLength > 2):
+                sequenceLength+=1
+                smoothedLoss = switchValue*1.1
+                trainBatchSize = finalBatchSize
         #dataBatch = cpuReplayBuffer.getRandSequence(trainBatchSize,device=device,percentageRange=trainingSet)
         #trainLoss = Learn.updateMotionModel(dataBatch)
         dataBatch = cpuReplayBuffer.getRandSequenceFixedLength(trainBatchSize,sequenceLength,device=device,percentageRange=trainingSet)

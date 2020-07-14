@@ -8,6 +8,7 @@ class Clifford:
     def __init__(self,sdfRootPath='',physicsClientId=0):
         self.sdfRP = sdfRootPath
         self.physicsClientId=physicsClientId
+        self.suspensionOffset = -0.005
         self.importClifford()
 
     def importClifford(self):
@@ -114,7 +115,7 @@ class Clifford:
         dampConstant = 100
         susForces = []
         for springState in springStates:
-            posErr = -springState[0]
+            posErr = self.suspensionOffset -springState[0]
             velErr = -springState[1]
             susForces.append(posErr*springConstant+velErr*dampConstant-10)
         p.setJointMotorControlArray(self.cliffordID,self.springJointIDs,p.TORQUE_CONTROL,forces=susForces,physicsClientId=self.physicsClientId)
