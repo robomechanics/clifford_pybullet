@@ -59,11 +59,12 @@ if __name__ == '__main__':
     outStateDim = 27 # (7 relative position) + (6 twist) + (14 joint state)
 
     # training/ neural network parameters
-    learningRate = 0.00005
+    learningRate = 0.000025
     lrDecay_stepSize = 2000
     lrDecay_gamma = 1#0.9
     weight_decay=0
-    numParticles = 2
+    finalNumParticles = 64
+    numParticles = 1
     learningArgs = [learningRate,lrDecay_stepSize,lrDecay_gamma,weight_decay,numParticles]
     argDim = [inStateDim,inMapDim,inActionDim,outStateDim]
     convSizes = [[32,5],[32,4],[32,3]]
@@ -72,6 +73,7 @@ if __name__ == '__main__':
     dropout_ps = [0,0,0]
     motionModelArgs = [argDim,networkSizes,dropout_ps]
     Learn = learnSequentialProbabilistic(learningArgs,motionModelArgs)
+    finalTrainBatchSize = 16
     trainBatchSize = 64
     sequenceLength = 2
     maxSequenceLength = 50
@@ -80,13 +82,17 @@ if __name__ == '__main__':
     testSet = [trainingSet[1],1.0]
     smoothing = 0.9
     smoothedLoss = 1
-    switchValue = -30
+    switchValue = -50
+    finalSwitchValue = -50
 
     numUpdates = 500000000
     for updateCount in range(numUpdates):
         if smoothedLoss < switchValue and sequenceLength<maxSequenceLength:
             sequenceLength+=1
+            numParticles = finalNumParticles
+            switchValue = finalSwitchValue
             smoothedLoss = switchValue+np.abs(switchValue*0.1)
+            trainBatchSize = finalTrainBatchSize
         dataBatch = cpuReplayBuffer.getRandSequenceFixedLength(trainBatchSize,sequenceLength,device=device,percentageRange=trainingSet)
         trainLoss = Learn.updateMotionModel(dataBatch)
         smoothedLoss = smoothing*smoothedLoss + (1-smoothing)*trainLoss
