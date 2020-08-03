@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from scipy.spatial.transform import Rotation as R
+#from scipy.spatial.transform import Rotation as R
 
 class deterministicMotionModel(nn.Module):
 	def __init__(self, motionModelArgs,batchNormsOn = True):

@@ -196,6 +196,23 @@ class sequentialReplayBuffer(object):
 			output.append([[self.inputData[j][startIndex+i,:].to(device) for j in range(0,len(self.inputData))],
 						[self.outputData[j][startIndex+i,:].to(device) for j in range(0,len(self.outputData))]])
 		return output
+	def getRandSequenceFixedLengthInterleaved(self,sequenceLength,batchSize,device='',percentageRange=[0.,1.]):
+		if len(device)==0:
+			device = self.device
+		if self.lastSequenceLength != sequenceLength:
+			self.validStartIndices = []
+			for i in range(len(self.sequenceStartIndices)-1):
+				self.validStartIndices = self.validStartIndices+list(range(self.sequenceStartIndices[i],self.sequenceStartIndices[i+1]-sequenceLength))
+			self.validStartIndices = np.array(self.validStartIndices)
+			self.lastSequenceLength = sequenceLength
+		startIndex = self.validStartIndices[self.validStartIndices >= int(self.bufferIndex*percentageRange[0])]
+		startIndex = startIndex[startIndex < int(self.bufferIndex*percentageRange[1])-sequenceLength]
+		startIndex = np.random.choice(startIndex,batchSize,replace=False)
+		indices = torch.from_numpy(startIndex).repeat_interleave(sequenceLength) + torch.tensor(range(sequenceLength)).repeat(batchSize)
+		#indices = torch.from_numpy(startIndex).repeat(sequenceLength) + torch.tensor(range(sequenceLength)).repeat_interleave(batchSize)
+		output = [[self.inputData[i][indices,:].to(device) for i in range(len(self.inputData))],
+				[self.outputData[i][indices,:].to(device) for i in range(len(self.outputData))]]
+		return output
 	def saveData(self):
 		for i in range(len(self.inputData)):
 			torch.save(self.inputData[i][range(0,self.bufferIndex),:],self.saveDataPrefix+"sequentialSimInputData"+str(i)+".pt")
