@@ -10,7 +10,7 @@ class cliffordStateTransformation(object):
         relativeOrien = nnOutput[:,3:7]
         relativeOrien = relativeOrien/torch.sqrt((relativeOrien**2).sum(dim=1)).unsqueeze(1)
         newTwist = nnOutput[:,7:13]
-        newJointState = nnOutput[:,13:27]
+        newJointState = nnOutput[:,13:]
         newPosition,newOrientation = self.transformMul(self.currentState[:,0:3],self.currentState[:,3:7],relativePos,relativeOrien)
         self.currentState = torch.cat((newPosition,newOrientation,newTwist,newJointState),dim=1)
         return self.currentState
@@ -21,7 +21,7 @@ class cliffordStateTransformation(object):
         upDirWorld[:,2] = 1.
         upDirRobot = self.qrot(Rbw,upDirWorld)
         twist = self.currentState[:,7:13]
-        jointState = self.currentState[:,13:27]
+        jointState = self.currentState[:,13:]
         #inState = torch.cat((tiltAngles,twist,jointState),dim=1)
         inState = torch.cat((upDirRobot,twist,jointState),dim=1)
         return inState
@@ -29,7 +29,7 @@ class cliffordStateTransformation(object):
         Rbw = self.qinv(self.currentState[:,3:7])
         pbw = self.qrot(Rbw,-self.currentState[:,0:3])
         relativePos,relativeOrien = self.transformMul(pbw,Rbw,absoluteState[:,0:3],absoluteState[:,3:7])
-        return torch.cat((relativePos,relativeOrien,absoluteState[:,7:27]),dim=1)
+        return torch.cat((relativePos,relativeOrien,absoluteState[:,7:]),dim=1)
     def posHeading(self):
         xVec = torch.zeros(self.currentState.shape[0],3).to(self.currentState.device)
         xVec[:,0] = 1.
@@ -48,11 +48,6 @@ class cliffordStateTransformation(object):
         """
         assert q.shape[-1] == 4
         assert r.shape[-1] == 4
-        
-        #q = q/torch.sqrt((q**2).sum(dim=1)).unsqueeze(1)
-        #r = r/torch.sqrt((r**2).sum(dim=1)).unsqueeze(1)
-        #print("qNorm" + str(torch.sqrt((q**2).sum(dim=1))[0]))
-        #print("rNorm" + str(torch.sqrt((r**2).sum(dim=1))[0]))
 
         original_shape = q.shape
         
@@ -64,33 +59,12 @@ class cliffordStateTransformation(object):
         z = terms[:, 3, 2] - terms[:, 0, 1] + terms[:, 1, 0] + terms[:, 2, 3]
         w = terms[:, 3, 3] - terms[:, 0, 0] - terms[:, 1, 1] - terms[:, 2, 2]
         qout = torch.stack((x, y, z, w), dim=1).view(original_shape)
-        #qout = qout/torch.sqrt((qout**2).sum(dim=1)).unsqueeze(1)
-        #print("qout Norm" + str(torch.sqrt((qout**2).sum(dim=1))[0]))
         return qout
     def qrot(self,q, v):
         qinv_ = self.qinv(q)
         p = torch.cat((v,torch.zeros((v.shape[0],1),device=v.device,dtype=v.dtype)),dim=1)
         p_prime = self.qmul(self.qmul(q,p),qinv_)
         return p_prime[:,:3]
-        """
-        Rotate vector(s) v about the rotation described by quaternion(s) q.
-        Expects a tensor of shape (*, 4) for q and a tensor of shape (*, 3) for v,
-        where * denotes any number of dimensions.
-        Returns a tensor of shape (*, 3).
-        """
-        """
-        assert q.shape[-1] == 4
-        assert v.shape[-1] == 3
-        assert q.shape[:-1] == v.shape[:-1]
-        
-        original_shape = list(v.shape)
-        q = q.view(-1, 4)
-        v = v.view(-1, 3)
-        
-        qvec = q[:, 0:3]
-        uv = torch.cross(qvec, v, dim=1)
-        uuv = torch.cross(qvec, uv, dim=1)
-        return (v + 2 * (q[:, 3:] * uv + uuv)).view(original_shape)"""
     def qinv(self,q):
         assert q.shape[-1] == 4
         if torch.isnan(torch.sum(q)).item():
